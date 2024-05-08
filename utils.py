@@ -24,11 +24,9 @@ class TrainSetLoader(Dataset):
                 # 减少了训练集中存在反射面的图片
         scene_idx = []
         # 存储不同场景的索引
-        for i in range(75):
-            scene_idx = np.append(scene_idx, [0, 1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13, 14])
+        for i in range(20):
+            scene_idx = np.append(scene_idx, [0,1,2,3,4,5,6,7,8,9,10,11,12])
             # 去除4、6、15号场景的索引，占75%
-        for i in range(25):
-            scene_idx = np.append(scene_idx, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
         # scene_idx中共有1375个场景索引，存在大量重复
         # 通过后续的数据增强提高训练数据的多样性
         self.scene_idx = scene_idx.astype('int')
@@ -65,7 +63,7 @@ class TrainSetLoader(Dataset):
             lf, dispGT, refocus_flag = refocus_augmentation(lf, dispGT)
         else:
             refocus_flag = 0
-
+        '''
         sum_diff = 0
         glass_region = False
         while (sum_diff < 0.01 or glass_region == True):
@@ -76,13 +74,32 @@ class TrainSetLoader(Dataset):
                 sum_diff = np.sum(np.abs(lf_crop[self.angRes//2, self.angRes//2, :, :] -
                                          np.squeeze(lf_crop[self.angRes//2, self.angRes//2, self.patchsize//2, self.patchsize//2]))
                                   ) / (self.patchsize * self.patchsize)
-
+        '''
+        lf_crop, dispGT_crop = random_crop(lf, dispGT, self.patchsize, refocus_flag)
         data = rearrange(lf_crop, 'a1 a2 h w -> (a1 h) (a2 w)', a1=self.angRes, a2=self.angRes)
         data, label = orientation_augmentation(data, dispGT_crop)
         data = data.astype('float32')
         label = label.astype('float32')
         data = ToTensor()(data.copy())
         label = ToTensor()(label.copy())
+        # /////////////////////////////////////////////////////////////
+        # 获取最大值和最小值
+        # max_value1 = torch.max(data[~torch.isinf(data) & ~torch.isnan(data)])  # 忽略inf和NaN
+        # min_value1 = torch.min(data[~torch.isinf(data) & ~torch.isnan(data)])  # 忽略inf和NaN
+        # max_value2 = torch.max(label[~torch.isinf(label) & ~torch.isnan(label)])  # 忽略inf和NaN
+        # min_value2 = torch.min(label[~torch.isinf(label) & ~torch.isnan(label)])  # 忽略inf和NaN
+        # 检查inf和NaN
+        # has_inf = torch.any(torch.isinf(data))
+        # has_nan = torch.any(torch.isnan(data))
+
+        # print("最大值:", max_value1.item())
+        # print("最小值:", min_value1.item())
+        # print("最大值:", max_value2.item())
+        # print("最小值:", min_value2.item())
+        # print("包含inf:", has_inf.item())
+        # print("包含NaN:", has_nan.item())
+        # /////////////////////////////////////////////////////////////
+        return data, label
 
         return data, label
 

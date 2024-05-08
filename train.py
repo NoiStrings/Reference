@@ -1,4 +1,5 @@
 import time
+import os
 import argparse
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
@@ -11,15 +12,17 @@ from model import Net
 # Settings
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--cwd',           type=str,   default=os.getcwd())
+    parser.add_argument('--log_path',      type=str,   default=os.getcwd() + "/logs/")
     parser.add_argument('--device',        type=str,   default='cuda:0')
     parser.add_argument('--parallel',      type=bool,  default=False)
-    parser.add_argument('--num_workers',   type=int,   default=8)
+    parser.add_argument('--num_workers',   type=int,   default=6)
     parser.add_argument("--angRes",        type=int,   default=9,    help="angular resolution")
     parser.add_argument('--model_name',    type=str,   default='OACC-Net')
-    parser.add_argument('--trainset_dir',  type=str,   default='./dataset/training/')
-    parser.add_argument('--validset_dir',  type=str,   default='./dataset/validation/')
+    parser.add_argument('--trainset_dir',  type=str,   default='./data/training/')
+    parser.add_argument('--validset_dir',  type=str,   default='./data/validation/')
     parser.add_argument('--patchsize',     type=int,   default=48)
-    parser.add_argument('--batch_size',    type=int,   default=16)
+    parser.add_argument('--batch_size',    type=int,   default=8)
     parser.add_argument('--lr',            type=float, default=1e-3, help='initial learning rate')
     parser.add_argument('--n_epochs',      type=int,   default=3500, help='number of epochs to train')
     # 最多训练多少个epoch
@@ -88,6 +91,7 @@ def train(cfg):
             disp = net(data, dispGT)
             # 将当前batch的训练数据移至指定设备，并输入模型
             # 输出预测的视差图
+            print(disp.shape, dispGT.shape)
             loss = criterion_Loss(disp, dispGT[:, 0, :, :].unsqueeze(1))
             # 预测视差图与实际视差图进行比对，计算损失
             optimizer.zero_grad()
@@ -216,4 +220,8 @@ def save_ckpt(state, save_path='./log', filename='checkpoint.pth.tar'):
 
 if __name__ == '__main__':
     cfg = parse_args()
+    try:
+        os.makedirs("log")
+    except:
+        pass
     train(cfg)
