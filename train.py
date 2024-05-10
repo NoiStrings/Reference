@@ -24,14 +24,14 @@ def parse_args():
     parser.add_argument('--patchsize',     type=int,   default=48)
     parser.add_argument('--batch_size',    type=int,   default=8)
     parser.add_argument('--lr',            type=float, default=1e-3, help='initial learning rate')
-    parser.add_argument('--n_epochs',      type=int,   default=3500, help='number of epochs to train')
+    parser.add_argument('--n_epochs',      type=int,   default=100, help='number of epochs to train')
     # 最多训练多少个epoch
     parser.add_argument('--n_steps',       type=int,   default=3500, help='number of epochs to update learning rate')
     # 每多少个epoch更新一次学习率
     parser.add_argument('--gamma',         type=float, default=0.5,  help='learning rate decaying factor')
     # 学习率衰减率，用于学习率调度器
-    parser.add_argument('--load_pretrain', type=bool,  default=False)
-    parser.add_argument('--model_path',    type=str,   default='./log/OACC-Net.pth.tar')
+    parser.add_argument('--load_pretrain', type=bool,  default=True)
+    parser.add_argument('--model_path',    type=str,   default='./models/OACC-Net.pth.tar')
 
     return parser.parse_args()
 
@@ -53,8 +53,9 @@ def train(cfg):
             net.load_state_dict(model['state_dict'], strict=False)
             # 将预训练模型的状态字典（模型参数）载入net
             # strict=False: 允许net与预训练模型的权重存在一定差异
+            epoch_state = model['epoch']
         else:
-            print("=> no model found at '{}'".format(cfg.load_model))
+            print("=> no model found at '{}'".format(cfg.model_path))
 
     if cfg.parallel:
         net = torch.nn.DataParallel(net, device_ids=[0, 1])
@@ -91,7 +92,6 @@ def train(cfg):
             disp = net(data, dispGT)
             # 将当前batch的训练数据移至指定设备，并输入模型
             # 输出预测的视差图
-            print(disp.shape, dispGT.shape)
             loss = criterion_Loss(disp, dispGT[:, 0, :, :].unsqueeze(1))
             # 预测视差图与实际视差图进行比对，计算损失
             optimizer.zero_grad()
@@ -104,19 +104,24 @@ def train(cfg):
         if idx_epoch % 1 == 0:
             # 每个epoch执行一次
             loss_list.append(float(np.array(loss_epoch).mean()))
-            print(time.ctime()[4:-5] + ' Epoch----%5d, loss---%f' % 
-                  (idx_epoch + 1, float(np.array(loss_epoch).mean())))
+            log_info = "[Train] " + time.ctime()[4:-5] + "\t epoch: {:0>4} | loss: {:.5f}".format(idx_epoch + 1, float(np.array(loss_epoch).mean()))
+            with open("logs/train_log.txt", "a") as f:
+                f.write(log_info)
+                f.write("\n")
+            print(log_info)  
+            '''print(time.ctime()[4:-5] + ' Epoch----%5d, loss---%f' % 
+                  (idx_epoch + 1, float(np.array(loss_epoch).mean())))'''
             # 计算、收集、打印当前epoch各batch的损失平均值
             if cfg.parallel:
                 save_ckpt({
                     'epoch': idx_epoch + 1,
                     'state_dict': net.module.state_dict(),
-                }, save_path='./log/', filename=cfg.model_name + '.pth')
+                }, save_path='./models/', filename=cfg.model_name + '.pth.tar')
             else:
                 save_ckpt({
                     'epoch': idx_epoch + 1,
                     'state_dict': net.state_dict(),
-                }, save_path='./log/', filename=cfg.model_name + '.pth')
+                }, save_path='./models/', filename=cfg.model_name + '.pth.tar')
             # 保存模型状态（当前周期索引与状态字典）
             # 并行训练需通过net.module.state_dict()获取
         if idx_epoch % 10 == 9:
@@ -125,13 +130,13 @@ def train(cfg):
                 save_ckpt({
                     'epoch': idx_epoch + 1,
                     'state_dict': net.module.state_dict(),
-                }, save_path='./log/', filename=cfg.model_name + str(idx_epoch + 1) + '.pth')
+                }, save_path='./models/', filename=cfg.model_name + str(idx_epoch + 1) + '.pth.tar')
             else:
                 save_ckpt({
                 'epoch': idx_epoch + 1,
                 'state_dict': net.state_dict(),
-            }, save_path='./log/', filename=cfg.model_name + str(idx_epoch + 1) + '.pth')
-
+            }, save_path='./models/', filename=cfg.model_name + str(idx_epoch + 1) + '.pth.tar')
+            
             valid(net, cfg, idx_epoch + 1)
             # 进行模型验证
 
@@ -143,11 +148,11 @@ def valid(net, cfg, epoch):
     torch.no_grad()
     scene_list = ['boxes', 'cotton', 'dino', 'sideboard']
     angRes = cfg.angRes
-
-    txtfile = open(cfg.model_name + '_MSE100.txt', 'a')
-    txtfile.write('Epoch={}:\t'.format(epoch))
-    txtfile.close()
-
+    
+    with open("logs/valid_log.txt", "a") as f:
+        f.write("epoch: {:0>4} ==========".format(epoch))
+        f.write("\n")
+    
     for scenes in scene_list:
         # 循环4次，每次为一个场景
         lf = np.zeros(shape=(9, 9, 512, 512, 3), dtype=int)
@@ -203,13 +208,15 @@ def valid(net, cfg, epoch):
         mse100 = np.mean((disp[11:-11, 11:-11] - disp_gt[11:-11, 11:-11]) ** 2) * 100
         # 选取靠近中心的像素，计算均方根误差
         # 边缘像素可能因为缺少邻域信息而导致预测失真
-        txtfile = open(cfg.model_name + '_MSE100.txt', 'a')
-        txtfile.write('mse_{}={:3f}\t'.format(scenes, mse100))
-        txtfile.close()
-
-    txtfile = open(cfg.model_name + '_MSE100.txt', 'a')
-    txtfile.write('\n')
-    txtfile.close()
+        # txtfile = open(cfg.model_name + '_MSE100.txt', 'a')
+        # txtfile.write('mse_{}={:3f}\t'.format(scenes, mse100))
+        # txtfile.close()
+        
+        log_info = "[Valid] " + time.ctime()[4:-5] + "\t scene: {:<11} | loss: {:.5f}".format(scenes, mse100)
+        with open("logs/valid_log.txt", "a") as f:
+            f.write(log_info)
+            f.write("\n")
+        print(log_info)
 
     return
 

@@ -24,7 +24,7 @@ class TrainSetLoader(Dataset):
                 # 减少了训练集中存在反射面的图片
         scene_idx = []
         # 存储不同场景的索引
-        for i in range(20):
+        for i in range(40):
             scene_idx = np.append(scene_idx, [0,1,2,3,4,5,6,7,8,9,10,11,12])
             # 去除4、6、15号场景的索引，占75%
         # scene_idx中共有1375个场景索引，存在大量重复
@@ -63,19 +63,19 @@ class TrainSetLoader(Dataset):
             lf, dispGT, refocus_flag = refocus_augmentation(lf, dispGT)
         else:
             refocus_flag = 0
-        '''
+        
         sum_diff = 0
         glass_region = False
         while (sum_diff < 0.01 or glass_region == True):
             lf_crop, dispGT_crop = random_crop(lf, dispGT, self.patchsize, refocus_flag)
-            if (scene_id == 4 or scene_id == 6 or scene_id == 15):
-                glass_region = np.sum(dispGT_crop[:, :, 1]) < self.patchsize * self.patchsize
+            # if (scene_id == 4 or scene_id == 6 or scene_id == 15):
+            #     glass_region = np.sum(dispGT_crop[:, :, 1]) < self.patchsize * self.patchsize
             if glass_region == False:
                 sum_diff = np.sum(np.abs(lf_crop[self.angRes//2, self.angRes//2, :, :] -
                                          np.squeeze(lf_crop[self.angRes//2, self.angRes//2, self.patchsize//2, self.patchsize//2]))
                                   ) / (self.patchsize * self.patchsize)
-        '''
-        lf_crop, dispGT_crop = random_crop(lf, dispGT, self.patchsize, refocus_flag)
+        
+        # lf_crop, dispGT_crop = random_crop(lf, dispGT, self.patchsize, refocus_flag)
         data = rearrange(lf_crop, 'a1 a2 h w -> (a1 h) (a2 w)', a1=self.angRes, a2=self.angRes)
         data, label = orientation_augmentation(data, dispGT_crop)
         data = data.astype('float32')
@@ -99,8 +99,6 @@ class TrainSetLoader(Dataset):
         # print("包含inf:", has_inf.item())
         # print("包含NaN:", has_nan.item())
         # /////////////////////////////////////////////////////////////
-        return data, label
-
         return data, label
 
     def __len__(self):
