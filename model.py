@@ -319,7 +319,6 @@ class ModulateConv2d(nn.Module):
         out = self.fuse(x_modulated)
         # 对经调制的特征图进行卷积，得到当前扩张率下的匹配成本
         # out的本质是经过了mask调制后的特征图
-        print(out)
         return out
 
 

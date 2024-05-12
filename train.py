@@ -153,6 +153,7 @@ def valid(net, cfg, epoch):
         f.write("epoch: {:0>4} ==========".format(epoch))
         f.write("\n")
     
+    outputs = []
     for scenes in scene_list:
         # 循环4次，每次为一个场景
         lf = np.zeros(shape=(9, 9, 512, 512, 3), dtype=int)
@@ -204,20 +205,31 @@ def valid(net, cfg, epoch):
         disp = disp[0: data.shape[2], 0: data.shape[3]]
         # 裁剪合并后的图，以确保其shape与标准一致
         disp = np.float32(disp.data.cpu())
-
-        mse100 = np.mean((disp[11:-11, 11:-11] - disp_gt[11:-11, 11:-11]) ** 2) * 100
+        
+        outputs.append(disp)
+        
+        disp_sample = disp[11:-11, 11:-11]
+        disp_gt_sample = disp_gt[11:-11, 11:-11]
+        mse100 = np.mean((disp_sample - disp_gt_sample) ** 2) * 100
+        abs_error = np.abs(disp_sample - disp_gt_sample)
+        bad_pixels = np.sum(abs_error > 0.1)
+        total_pixels = disp_sample.size
+        bpr = bad_pixels / total_pixels
         # 选取靠近中心的像素，计算均方根误差
         # 边缘像素可能因为缺少邻域信息而导致预测失真
         # txtfile = open(cfg.model_name + '_MSE100.txt', 'a')
         # txtfile.write('mse_{}={:3f}\t'.format(scenes, mse100))
         # txtfile.close()
         
-        log_info = "[Valid] " + time.ctime()[4:-5] + "\t scene: {:<11} | loss: {:.5f}".format(scenes, mse100)
+        log_info = "[Valid] " + time.ctime()[4:-5] + "\t scene: {:<11} | loss: {:.5f} | bpr: {:.5f}".format(scenes, mse100, bpr)
         with open("logs/valid_log.txt", "a") as f:
             f.write(log_info)
             f.write("\n")
         print(log_info)
-
+        
+    outputs = np.stack(outputs)
+    np.save('./valid_outputs/outputs_{:0>4}.npy'.format(epoch), outputs)
+    
     return
 
 
