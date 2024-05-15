@@ -1,6 +1,13 @@
 import argparse
 from utils import *
 from model import Net
+import numpy as np
+import os
+import torch
+import imageio
+from einops import rearrange
+from torchvision.transforms import ToTensor
+
 
 
 def parse_args():
@@ -31,9 +38,11 @@ def test(cfg):
     model = torch.load(cfg.model_path, map_location={'cuda:0': cfg.device})
     net.load_state_dict(model['state_dict'])
     # 初始化模型，并套用训练完毕的模型参数
-
+    
+    outputs = []
+    
     for scenes in scene_list:
-        print('Working on scene: ' + scenes + '...')
+        # print('Working on scene: ' + scenes + '...')
         temp = imageio.imread(cfg.testset_dir + scenes + '/input_Cam000.png')
         lf = np.zeros(shape=(9, 9, temp.shape[0], temp.shape[1], 3), dtype=int)
         for i in range(81):
@@ -55,7 +64,7 @@ def test(cfg):
                 disp = net(data.unsqueeze(0).to(cfg.device))
                 # unsqueeze新增维度，用于匹配模型输入shape
             disp = np.float32(disp[0,0,:,:].data.cpu())
-        '''
+        
         else:
             patchsize = cfg.patchsize
             stride = patchsize // 2
@@ -82,9 +91,14 @@ def test(cfg):
             disp = LFintegrate(out_disps, patchsize, patchsize // 2)
             disp = disp[0: data.shape[2], 0: data.shape[3]]
             disp = np.float32(disp.data.cpu())
-        '''
-        print('Finished! \n')
-        write_pfm(disp, cfg.save_path + '%s.pfm' % (scenes))
+        
+        outputs.append(disp)
+        
+        # print('Finished! \n')
+        # write_pfm(disp, cfg.save_path + '%s.pfm' % (scenes))
+    outputs = np.stack(outputs)
+    np.save('./test_outputs/outputs.npy', outputs)
+
 
     return
 
